@@ -279,7 +279,7 @@ void ghostf(char maze[r][c], ghost& g, int& count) {
         count = 1;
     }
 }
-void update(char maze[r][c],ghost g[], player& p, int& pellets, int& pspeed,int& powercount,int& reset) {
+void update(char maze[r][c],ghost g[], player& p, int& pellets, int& pspeed,int& powercount,int& reset,bool& win, bool& lose) {
     //playermove
     playermove(maze,p,pspeed);
     //ghostmove(chaser)
@@ -357,12 +357,67 @@ void update(char maze[r][c],ghost g[], player& p, int& pellets, int& pspeed,int&
     pspeed++;
     for(int k=0;k<4;k++)
     g[k].speed++;
+    //GAMEOVER
+	if (pellets == 0)
+	{
+		win = true;
+	}
+    if (p.lives == 0)
+    {
+        lose = true;
+    }
 }
-void draw(sf::RenderWindow& window, char maze[r][c],ghost g[], const player& p) {
+void draw(sf::RenderWindow& window, char maze[r][c], ghost g[], const player& p, const sf::Font& font, bool paused, int pellets,bool& win, bool& lose) {
     const float TILE = 30.f;
     const float TOP_OFFSET = 50.f;
 
     window.clear(sf::Color::Black);
+
+    sf::Text scoreText(font, "SCORE: " + to_string(p.score), 20);
+    scoreText.setFillColor(sf::Color::White);
+    scoreText.setPosition({ 15.f, 12.f });
+    window.draw(scoreText);
+
+    sf::Text livesText(font, "LIVES: " + to_string(p.lives), 20);
+    livesText.setFillColor(sf::Color::Yellow);
+    livesText.setPosition({ 450.f, 12.f });
+    window.draw(livesText);
+
+    if (!(win || lose))
+    {
+        sf::Text pelletsText(font, "PELLETS: " + to_string(pellets), 15);
+        pelletsText.setFillColor(sf::Color::Cyan);
+        pelletsText.setPosition({ 240.f, 5.f });
+        window.draw(pelletsText);
+    }
+
+    if (win)
+    {
+        sf::Text WIN(font, "YOU WIN!", 20);
+        WIN.setFillColor(sf::Color::Green);
+        WIN.setPosition({ 240.f, 12.f });
+        window.draw(WIN);
+    }
+
+    if (lose)
+    {
+        sf::Text LOSE(font, "YOU LOSE!", 20);
+        LOSE.setFillColor(sf::Color::Red);
+        LOSE.setPosition({ 240.f, 12.f });
+        window.draw(LOSE);
+    }
+
+    if (paused&&!(win||lose)) {
+        sf::Text pausedText(font, "PAUSED", 15);
+        pausedText.setFillColor(sf::Color::Red);
+        pausedText.setPosition({ 240.f, 20.f });
+        window.draw(pausedText);
+    }
+
+    sf::RectangleShape divider({ 570.f, 2.f });
+    divider.setFillColor(sf::Color(33, 33, 222));
+    divider.setPosition({ 0.f, TOP_OFFSET - 2.f });
+    window.draw(divider);
 
     sf::RectangleShape wallBlock({ TILE, TILE });
     wallBlock.setFillColor(sf::Color(33, 33, 222));
@@ -454,20 +509,22 @@ void draw(sf::RenderWindow& window, char maze[r][c],ghost g[], const player& p) 
     window.display();
 }
 int main() {
+    sf::Font font;
+    if (!font.openFromFile("arial.ttf")) {
+        cout << "Failed to load font\n";
+    }
     srand(static_cast<unsigned int>(time(0)));
+    bool win=0, lose=0;
     int pellets = 158;
     player p;
     int count = 0;
 	ghost g[4]; // ghost positions in the grid
 	int powerPellet[2]; // position of the power pellet
     char maze[r][c];
-	bool gameOver = false; // game over flag
-	bool win = false; // win flag
 	bool paused = false; // pause flag
-    bool change=false,reset=false;
     int pspeed = 0;
     int powercount = 0;
-    int resetcount = 0;
+	int resetcount = 0;
 
     intmap(maze);
     
@@ -476,6 +533,14 @@ int main() {
     for (int i = 0; i < r; i++) {
         for (int j = 0; j < c; j++) {
             cout << maze[i][j] << " ";
+            pellets = 0;
+            for (int i = 0; i < r; i++) {
+                for (int j = 0; j < c; j++) {
+                    if (maze[i][j] == '.' || maze[i][j] == 'o') {
+                        pellets++;
+                    }
+                }
+            }
             if (maze[i][j] == 'P') {
                 p.x = j;
                 p.y = i;
@@ -513,10 +578,11 @@ int main() {
             inValues(window, maze, p, paused);
             // update
             if (!paused) {
-                update(maze, g, p, pellets, pspeed, powercount, resetcount);
+                if(!(win||lose))
+                    update(maze, g, p, pellets, pspeed, powercount, resetcount, win, lose);
             }
             // draw
-            draw(window, maze, g, p);
+            draw(window, maze, g, p, font, paused, pellets, win, lose);
     }
 
 
