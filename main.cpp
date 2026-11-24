@@ -19,7 +19,7 @@ struct player {
 };
 struct ghost {
     int x, y, direction,speed,defaultx, defaulty;
-	bool active = true; // active flag
+	bool powerdown = false; // active flag
 	int px, py; // previous x and y positions
 };
 void intmap(char arr[r][c]) {
@@ -283,17 +283,16 @@ void update(char maze[r][c],ghost g[], player& p, int& pellets, int& pspeed,int&
     //playermove
     playermove(maze,p,pspeed);
     //ghostmove(chaser)
-	if (p.powerUp) {
-		for (int i = 0;i < 4;i++) {
-			ghostf(maze, g[i], g[i].speed);
-		}
-	}
-	else {
-        chaser(maze, p, g[0], g[0].speed);
-        chaser(maze, p, g[2], g[2].speed);
-        wanderers(maze, g[1], g[1].speed);
-        wanderers(maze, g[3], g[3].speed);
-		}
+    for (int i = 0;i < 4;i++) {
+        if (g[i].powerdown)
+            ghostf(maze, g[i], g[i].speed);
+        else {
+            if(i==0)chaser(maze, p, g[0], g[0].speed);
+            if (i == 2)chaser(maze, p, g[2], g[2].speed);
+            if (i == 1)wanderers(maze, g[1], g[1].speed);
+            if (i == 3)wanderers(maze, g[3], g[3].speed);
+        }
+    }
     //score
     if (maze[p.y][p.x] == '.') {
         p.score += 10;
@@ -306,12 +305,13 @@ void update(char maze[r][c],ghost g[], player& p, int& pellets, int& pspeed,int&
         pellets--;
         p.powerUp = 1;
         powercount = 0;
+		for (int i = 0;i < 4;i++) {
+			g[i].powerdown = 1;
+		}
     }
     //Lives
-    if (!p.powerUp)
-    {
         for (int k = 0;k < 4;k++)
-            if ((p.y == g[k].y && p.x == g[k].x)|| p.x == g[k].px && p.y == g[k].py && g[k].x == p.px && g[k].y == p.py)
+            if (((p.y == g[k].y && p.x == g[k].x)|| p.x == g[k].px && p.y == g[k].py && g[k].x == p.px && g[k].y == p.py)&&!g[k].powerdown)
             {
                 p.lives--;
                 p.x = p.defaultx;
@@ -319,16 +319,18 @@ void update(char maze[r][c],ghost g[], player& p, int& pellets, int& pspeed,int&
                 p.px = p.defaultx;
                 p.py = p.defaulty;
                 p.direction = 0;
+				powercount = 0;
                 for (int k = 0;k < 4;k++)
                 {
                     g[k].x = g[k].defaultx;
                     g[k].y = g[k].defaulty;
                     g[k].px = g[k].defaultx;
                     g[k].py = g[k].defaulty;
+					g[k].powerdown = 0;
                     g[k].direction = 0;
                 }
+				break;//so multiple lives are not lost in one frame
             }
-    }
     //POWERUP
     if (p.powerUp)
     {
@@ -337,19 +339,19 @@ void update(char maze[r][c],ghost g[], player& p, int& pellets, int& pspeed,int&
             p.powerUp = 0;
             for (int k = 0;k < 4;k++)
                 {
-                    g[k].active = true;
+                g[k].powerdown = false;
                 }
         }
         powercount++;
         for (int k = 0;k < 4;k++)
-            if ((p.y == g[k].y && p.x == g[k].x) || p.x == g[k].px && p.y == g[k].py && g[k].x == p.px && g[k].y == p.py)
+            if (((p.y == g[k].y && p.x == g[k].x) || p.x == g[k].px && p.y == g[k].py && g[k].x == p.px && g[k].y == p.py)&&g[k].powerdown)
             {
                 p.score += 200;
                 g[k].x = g[k].defaultx;
                 g[k].y = g[k].defaulty;
 				g[k].px = g[k].defaultx;
                 g[k].py = g[k].defaulty;
-                g[k].active = false;
+                g[k].powerdown = false;
                 g[k].direction = 0;
             }
     }
@@ -463,20 +465,15 @@ void draw(sf::RenderWindow& window, char maze[r][c], ghost g[], const player& p,
                 powerPelletShape.setPosition({ xPos + 9.f, yPos + 9.f });
                 window.draw(powerPelletShape);
             }
-            if (p.powerUp)
-            {
-                
-                for (int k = 0; k < 4; k++)
-                    if (i == g[k].y && j == g[k].x && g[k].active)
-                    {
-                        ghostfShape.setPosition({ xPos + 3.f, yPos + 3.f });
-                        window.draw(ghostfShape);
-                    }
-            }
-            else
-            {
-                for (int k = 0; k < 4; k++) {
-                    if (i == g[k].y && j == g[k].x && g[k].active) {
+            for (int k = 0; k < 4; k++)
+                if (i == g[k].y && j == g[k].x && g[k].powerdown)
+                {
+                    ghostfShape.setPosition({ xPos + 3.f, yPos + 3.f });
+                    window.draw(ghostfShape);
+                }
+                else
+                {
+                    if (i == g[k].y && j == g[k].x) {
                         switch (k) {
                         case 0:
                             ghost1Shape.setPosition({ xPos + 3.f, yPos + 3.f });
@@ -497,7 +494,6 @@ void draw(sf::RenderWindow& window, char maze[r][c], ghost g[], const player& p,
                         }
                     }
                 }
-            }
 
             if (i == p.y && j == p.x) {
                 playerShape.setPosition({ xPos + 3.f, yPos + 3.f });
@@ -528,19 +524,11 @@ int main() {
 
     intmap(maze);
     
-	// 4. Print the MAZE to the console and locations of player, ghosts, and power pellet
+	// Print the MAZE to the console and locations of player, ghosts, and power pellet
     cout << "MAZE USED IN GAME\n";
     for (int i = 0; i < r; i++) {
         for (int j = 0; j < c; j++) {
             cout << maze[i][j] << " ";
-            pellets = 0;
-            for (int i = 0; i < r; i++) {
-                for (int j = 0; j < c; j++) {
-                    if (maze[i][j] == '.' || maze[i][j] == 'o') {
-                        pellets++;
-                    }
-                }
-            }
             if (maze[i][j] == 'P') {
                 p.x = j;
                 p.y = i;
@@ -566,6 +554,16 @@ int main() {
             }
         }
         cout << "\n";
+    }
+
+    //Counting Pellets
+    pellets = 0;
+    for (int i = 0; i < r; i++) {
+        for (int j = 0; j < c; j++) {
+            if (maze[i][j] == '.' || maze[i][j] == 'o') {
+                pellets++;
+            }
+        }
     }
 
     sf::RenderWindow window(sf::VideoMode({ 570, 680 }), "Pac-Man");
