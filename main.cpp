@@ -4,6 +4,7 @@
 #include <fstream>
 #include <cstdlib>
 #include <ctime>
+#include <cstdio>//for removing the savegame.txt file
 
 const int r = 21; // number of rows
 const int c = 19; // number of columns
@@ -29,7 +30,7 @@ struct ghost {
 struct gameState {
     bool main = true;
     bool pause = false;
-    bool win = false, lose = false, playing = false;
+    bool win = false, lose = false, playing = false, savegame;
     int selected = -1, active = 0;
 };
 
@@ -119,7 +120,7 @@ void menu(sf::RenderWindow& window, gameState& game) {
     }
 }
 
-void inValues(sf::RenderWindow& window, char maze[r][c], player& p, gameState& game) {
+void inValues(sf::RenderWindow& window, char maze[r][c], player& p, ghost g[], gameState& game) {
     if (!game.main) {
         while (const std::optional event = window.pollEvent()) {
             if (event->is<sf::Event::Closed>())
@@ -133,14 +134,28 @@ void inValues(sf::RenderWindow& window, char maze[r][c], player& p, gameState& g
                     p.direction = 2;
                 else if ((key->code == sf::Keyboard::Key::Right || key->code == sf::Keyboard::Key::D) && maze[p.y][p.x + 1] != '#')
                     p.direction = 4;
-                else if ((key->code == sf::Keyboard::Key::Enter) && (game.win || game.lose)) {
-                    game.playing = false;
+                else if (key->code == sf::Keyboard::Key::Enter && (game.win||game.lose))
+                {
                     game.main = true;
-                    game.win = false;
-                    game.lose = false;
-                    game.pause = false;
-                    game.active = 0;
-                    game.selected = -1;
+                    game.playing = false;
+                }
+                else if (key->code == sf::Keyboard::Key::Escape) {
+                    game.main = true;
+                    game.playing = false;
+                    game.savegame = true;
+                    ofstream file("savegame.txt");
+                    file << p.score << " " << p.lives << endl << p.x << " " << p.y << endl;
+                    for (int i = 0; i < 4; i++) {
+                        file << g[i].x << " " << g[i].y << " ";
+                    }
+                    file << endl;
+                    for (int i = 0; i < r; i++) {
+                        for (int j = 0; j < c; j++) {
+                            file << maze[i][j];
+                        }
+                        file << endl;
+                    }
+                    file.close();
                 }
                 else if (key->code == sf::Keyboard::Key::P)
                     game.pause = !game.pause;
@@ -413,12 +428,18 @@ void update(char maze[r][c], ghost g[], player& p, int& pellets, int& pspeed, in
     pspeed++;
     for (int k = 0; k < 4; k++)
         g[k].speed++;
-
+    //WIN LOSE
     if (pellets == 0) {
         game.win = true;
     }
     if (p.lives == 0) {
         game.lose = true;
+    }
+    if (game.win || game.lose)
+    {
+        game.savegame = false;
+        //removes previous savegame
+        remove("savegame.txt");
     }
 }
 
@@ -468,7 +489,7 @@ void draw(sf::RenderWindow& window, char maze[r][c], ghost g[], player& p, const
         }
 
         sf::Text menuOption[3] = {
-            sf::Text(font, "CONTINUE", 26),
+            sf::Text(font,game.savegame? "CONTINUE": "NO SAVED GAME", 26),
             sf::Text(font, "NEW GAME", 26),
             sf::Text(font, "EXIT", 26)
         };
@@ -487,9 +508,52 @@ void draw(sf::RenderWindow& window, char maze[r][c], ghost g[], player& p, const
 
     switch (game.selected) {
     case 0:
-        game.main = false;
-        game.playing = true;
+        if (game.savegame) {
+            int temp = 0;
+            ifstream file("savegame.txt");
+            if (file.is_open()) {
+                file >> p.score;
+                file >> p.lives;
+                file >> p.x;
+                file >> p.y;
+                p.direction = 0;
+                p.powerUp = false;
+                for (int i = 0; i < 4; i++) {
+                    file >> g[i].x >> g[i].y;
+                    g[i].speed = 0;
+                    g[i].direction = 0;
+                    g[i].powerdown = false;
+                }
+                for (int i = 0; i < r; i++)
+                    for (int j = 0; j < c; j++)
+                    {
+                        file >> maze[i][j];
+                        if (maze[i][j] == 'P')
+                        {
+							p.px = j;
+							p.py = i;
+							maze[i][j] = '-';
+                        }
+                        if (maze[i][j] == 'G')
+                        {
+                            g[temp].px = j;
+                            g[temp].py = i;
+                            maze[i][j] = '-';
+                            temp++;
+                        }
+                    }
+                pspeed = 0;
+                powercount = 0;
+                pellets = countPellets(maze);
+            }
+            game.main = false;
+            game.playing = true;
+            game.pause = false;
+            game.win = false;
+            game.lose = false;
+        }
         game.selected = -1;
+        game.active = 0;
         break;
     case 1:
         intmap(maze);
@@ -510,7 +574,8 @@ void draw(sf::RenderWindow& window, char maze[r][c], ghost g[], player& p, const
         game.active = 0;
         break;
     case 2:
-        game.selected = -1;
+        game.selected = 0;
+        game.active = 0;
         window.close();
         break;
     }
@@ -640,6 +705,14 @@ int main() {
     game.selected = -1;
     game.active = 0;
 
+    ifstream in("savegame.txt");
+    if (!in) {
+        game.savegame = false;
+
+    }
+    else
+        game.savegame = true;
+	in.close();
     intmap(maze);
     intlocations(maze, p, g, powerPellet);
     int pellets = countPellets(maze);
@@ -648,7 +721,7 @@ int main() {
     window.setFramerateLimit(60);
 
     while (window.isOpen()) {
-        inValues(window, maze, p, game);
+        inValues(window, maze, p, g, game);
 
         if (!(game.pause || !game.playing)) {
             if (!(game.win || game.lose))
