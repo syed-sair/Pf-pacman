@@ -5,6 +5,7 @@ A 2D Pac-Man game built in C++ with SFML, featuring a multi-state menu system, p
 ## Team Members
 
 | Name | Roll Number |
+| :--- | :--- |
 | Syed Muhammad Sair Hamdani | 26L-0001 |
 
 
